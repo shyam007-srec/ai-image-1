@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Try-On | Dynexo Technology Solutions</title>
+    
+    <!-- Clean, professional styling -->
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; max-width: 900px; margin: 0 auto; background-color: #f8f9fa; color: #333; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .container { display: flex; gap: 30px; flex-wrap: wrap; }
+        .column { flex: 1; min-width: 300px; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        label { display: block; margin-top: 15px; font-weight: 600; font-size: 0.9em; }
+        input[type="file"], input[type="text"] { width: 100%; margin-top: 8px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; margin-top: 25px; padding: 12px; background: #000; color: #fff; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; transition: background 0.3s; }
+        button:hover { background: #333; }
+        #status { margin-top: 15px; font-weight: bold; text-align: center; color: #007bff; }
+        .result-box { width: 100%; min-height: 300px; border: 2px dashed #ddd; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-top: 10px; }
+        #result-img { max-width: 100%; max-height: 400px; display: none; }
+    </style>
+
+    <!-- Import the Gradio JS Client -->
+    <script type="module">
+        import { client } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const form = document.getElementById('tryon-form');
+            const statusText = document.getElementById('status');
+            const resultImg = document.getElementById('result-img');
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const personImg = document.getElementById('person').files[0];
+                const garmentImg = document.getElementById('garment').files[0];
+                const desc = document.getElementById('desc').value;
+                
+                if (!personImg || !garmentImg) {
+                    statusText.innerText = "Please upload both images.";
+                    statusText.style.color = "red";
+                    return;
+                }
+
+                statusText.innerText = "Processing... this may take a minute or two depending on server load.";
+                statusText.style.color = "#007bff";
+                resultImg.style.display = "none";
+                
+                try {
+                    // Connect to the IDM-VTON API
+                    const app = await client("yisol/IDM-VTON");
+                    
+                    // Send the request with the exact parameter order required by the endpoint
+                    const result = await app.predict("/tryon", [
+                        {"background": personImg, "layers": [], "composite": null}, 
+                        garmentImg, 
+                        desc, 
+                        true,   // is_checked (use auto-generated mask)
+                        false,  // is_checked_crop (auto-crop)
+                        30,     // denoise_steps
+                        42      // seed
+                    ]);
+                    
+                    // Extract the output image URL and display it
+                    const outputData = result.data[0];
+                    const imageUrl = typeof outputData === 'string' ? outputData : outputData.url;
+                    
+                    resultImg.src = imageUrl;
+                    resultImg.style.display = "block";
+                    statusText.innerText = "Generation complete!";
+                    statusText.style.color = "green";
+                    
+                } catch (error) {
+                    statusText.innerText = "Error: " + error.message;
+                    statusText.style.color = "red";
+                    console.error("API Error:", error);
+                }
+            });
+        });
+    </script>
+</head>
+<body>
+
+    <div class="header">
+        <h1>AI Virtual Try-On</h1>
+        <p>Upload a photo of a person and a garment to generate a realistic try-on.</p>
+    </div>
+
+    <div class="container">
+        <!-- Input Form -->
+        <div class="column">
+            <form id="tryon-form">
+                <label for="person">Person Image (Full body or upper body):</label>
+                <input type="file" id="person" accept="image/*" required>
+                
+                <label for="garment">Garment Image (Flat lay or on hanger):</label>
+                <input type="file" id="garment" accept="image/*" required>
+                
+                <label for="desc">Garment Description:</label>
+                <input type="text" id="desc" value="Short Sleeve Round Neck T-shirt" required>
+                
+                <button type="submit">Generate Try-On</button>
+            </form>
+            <p id="status"></p>
+        </div>
+
+        <!-- Output Display -->
+        <div class="column">
+            <label>Try-On Result:</label>
+            <div class="result-box">
+                <img id="result-img" alt="Generated Try-On">
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
